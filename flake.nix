@@ -1,28 +1,33 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs }:
-    let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-      rust-app = pkgs.rustPlatform.buildRustPackage {
-        pname = "desktop-controls";
-        version = "0.1.0";
-        src = ./.;
-        cargoLock = {
-            lockFile = ./Cargo.lock;
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "rust-src" "rustfmt" "clippy" ];
         };
-        nativeBuildInputs = [ pkgs.pkg-config ];
-        buildInputs = [ ];
-      };
-    in
-    {
-      defaultPackage.${system} = rust-app;
-      devShell.${system} = pkgs.mkShell {
-        inputsFrom = [rust-app];
-        packages = [ pkgs.rustc pkgs.cargo pkgs.pkg-config ];
-      };
-    };
+      in
+      {
+        devShell = pkgs.mkShell {
+          packages = [ rustToolchain ];
+          RUST_SRC_PATH = rustToolchain.packages.rust-src;
+        };
+
+        packages = {
+          desktop-controls = pkgs.rustPlatform.buildRustPackage {
+            pname = "desktop-controls";
+            version = "0.1.0"; # Replace with your version
+            src = ./.; # Assumes your Cargo.toml is in the same directory as flake.nix
+            cargoLock = {
+                lockFile = ./Cargo.lock;
+            };
+          };
+          default = self.packages.${system}.desktop-controls;
+        };
+      });
 }
